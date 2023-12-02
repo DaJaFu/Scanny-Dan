@@ -1,0 +1,14 @@
+Usage: ./port_scanner.py [option] port(s) 
+    
+    Ports can be anywhere from 1-65,535.
+    
+    Options: 
+        -h, --help : "Prints this message."
+
+        -p, --port [port] : "Use this to scan a single port."
+
+        -r, --range [ports] : "Scan a given range of ports. Ports must-
+                              -be in quotes, for example (-r '100-200')"
+        
+        -f, --file [file] : "Used to import a file with port numbers,
+                             seperated by line."

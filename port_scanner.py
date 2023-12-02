@@ -2,8 +2,10 @@
 import sys
 import socket
 from typing import List
+print('+------Scanny-Dans-Port-Scanner------+')
+#print(sys.argv)
 
-print(sys.argv)
+usage = open('usage.txt','r')
 
 #attempt to discover what service the specified port is running
 def get_service_name(port):
@@ -15,20 +17,22 @@ def get_service_name(port):
 
 #Get user input and return the data as a list of strings
 def get_input() -> List[str]:
-    #if the argument '-r' is passed in the command line, then use the given range of ports
-    if len(sys.argv) > 1 and sys.argv[1] == '-r':
-        try:
-            print('Input type: Port Range')
-            port_range = sys.argv[2].split('-')
-            port_input = range(int(port_range[0]),int(port_range[1])+1)
-            return port_input
-        except:
-            print('ERROR! Expected range of ports, seperated by a "-" Please try again.')
-    #if there is no arguement given, then default to a manual input
-    else:
-        print('Defaulting to manual port input')
-        port_input = input('Which port(s) would you like to scan? : ')
-        return port_input.split(',')
+    port_list = []
+    for argument in sys.argv:
+        if argument in ('-f','--file'):
+            port_f = open(str(sys.argv[2]),'r')
+            for port in port_f.read().split(','):
+                port_list.append(port)
+        elif argument in ('-p','--port'):
+            port_list.append(str(sys.argv[2]))
+        elif argument in ('-r','--range'):
+            range_l = str(sys.argv[2]).split('-')
+            for i in range(int(range_l[0]),int(range_l[1])+1):
+                port_list.append(i)
+        elif argument in ('-h','--help'):
+            print(usage.read())
+            return 'h'
+    return port_list
 
 #defining the port scan function, and setting parameters.
 def port_scan(target_ip: str, ports: List[str]):
@@ -40,6 +44,7 @@ def port_scan(target_ip: str, ports: List[str]):
         #if that doesn't work, skip the item in the list and print an error message.
         except ValueError:
             print(f"ERROR Expected integer: {port_string}")
+            print('-------------')
             continue
         #creating a socket using ipv4 (AF_INET)
         sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -52,11 +57,14 @@ def port_scan(target_ip: str, ports: List[str]):
         except:  
             print(f"Port {port} is closed.")
         print(f"Port is running service: {get_service_name(port)}")
+        print('-------------')
         sock.close()
 
 #if this script is the main program being run, attempt to scan ports using get_input
 if __name__ == "__main__":
-    try:
-        port_scan('localhost',get_input())
-    except:
-        print(f'ERROR! Port input received: {get_input()}')
+    if get_input() != 'h':    
+        try:
+            port_scan('localhost',get_input())
+        except:
+            print(f'ERROR! Port input received: {get_input()}')
+            print(usage.read())
