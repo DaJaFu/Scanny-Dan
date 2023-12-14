@@ -10,5 +10,5 @@ Usage: ./port_scanner.py [option] port(s)
         -r, --range [ports] : "Scan a given range of ports. Ports must-
                               -be in quotes, for example (-r '100-200')"
         
-        -f, --file [file] : "Used to import a file with port numbers,
-                             seperated by line."
+        -f, --file [file] : "Searches a given file for all possible port-
+                             -numbers."
