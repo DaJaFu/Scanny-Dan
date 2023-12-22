@@ -1,4 +1,4 @@
-Usage: ./port_scanner.py [option] port(s) 
+Usage: ./port_scanner.py [ip address] [option] port(s) 
     
     Ports can be anywhere from 1-65,535.
     

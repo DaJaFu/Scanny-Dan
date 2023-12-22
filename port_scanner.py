@@ -10,16 +10,35 @@ usage = open('usage.txt','r')
 #attempt to discover what service the specified port is running
 def get_service_name(port):
     try:
-        service = socket.getservbyport(port)
-        return service
+        return socket.getservbyport(port)
     except:
         return "Unknown"
-    
+
+def get_ip():
+    #simultaneously get ip and validate.
+    if len(sys.argv) > 2:
+        ip_address = sys.argv[1]
+        try:
+            socket.inet_aton(ip_address)
+            return ip_address
+        except socket.error:
+            try:
+                socket.inet_aton(socket.gethostbyname(ip_address))
+                print(f'Detected host: {socket.gethostbyname(ip_address)} from {ip_address}')
+                print('-------------')
+                return ip_address
+            except socket.error:
+                print('Something went wrong, host not detected!')
+                print('--------------------')
+    return False
+
 #get input type through command line input
 def get_type() -> str:
     arg_dict = {'-f':'f','--file':'f','-p':'p','--port':'p','-r':'r','--range':'r','-h':'h','--help':'h'}
     if sys.argv[1] in arg_dict:
         return arg_dict.get(sys.argv[1])
+    elif sys.argv[2] in arg_dict:
+        return arg_dict.get(sys.argv[2])
     else:
         return None
 
@@ -59,14 +78,14 @@ def parse_file(filename)->List[str]:
 #print(parse_file(sys.argv[2]))
 
 #Parse user input and return data as a list of strings
-def get_ports_from_input() -> List[str]:
+def get_ports() -> List[str]:
     port_list = []
     if get_type() == 'f':
-        port_list = parse_file(sys.argv[2])
+        port_list = parse_file(sys.argv[3])
     elif get_type() == 'p':
-        port_list.append(str(sys.argv[2]))
+        port_list.append(str(sys.argv[3]))
     elif get_type() == 'r':
-        range_l = str(sys.argv[2]).split('-')
+        range_l = str(sys.argv[3]).split('-')
         for i in range(int(range_l[0]),int(range_l[1])+1):
             port_list.append(i)
     return port_list
@@ -86,7 +105,7 @@ def port_scan(target_ip: str, ports: List[str]):
         #creating a socket using ipv4 (AF_INET)
         sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         #if the socket can't connect to a port within this time allotment, quit
-        sock.settimeout(1)
+        sock.settimeout(10)
         #attempt to connect to the current port, if unable, return that it's closed
         try:
             sock.connect((target_ip,port))
@@ -99,9 +118,12 @@ def port_scan(target_ip: str, ports: List[str]):
 
 #if this script is the main program being run, attempt to scan ports using get_input
 if __name__ == "__main__":
+    if get_type() != 'h' and get_ip() == False:
+        print('ERROR! Invalid ip address. Check input and try again!')
     if get_type() == None:
         print(f'ERROR! {" ".join(sys.argv)} is not acceptable input. Try using -h for more info.')
     elif get_type() == 'h':
         print(usage.read())
     else:
-        port_scan('localhost',get_ports_from_input())
+        print(f'Scanning port(s): {get_ports()}, on host: {get_ip()}')
+        port_scan(get_ip(),get_ports())
