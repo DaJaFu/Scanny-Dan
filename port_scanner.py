@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys
+import time
 import socket
 import csv
 import argparse
@@ -8,16 +9,20 @@ from typing import List
 print('+------Scanny-Dans-Port-Scanner------+')
 #print(sys.argv)
 
-max_threads = 50
-result = []
+#filename for csv export (file name must end in .csv)
+export_filename = 'scan_test.csv'
 
-#attempt to discover what service the specified port is running
+#maximum threads to be used
+max_threads = 50
+
+#estimate what service is running on a given port.
 def get_service_name(port):
     try:
         return socket.getservbyport(port)
     except:
         return "Unknown"
 
+#gathers ip address from command line input, validates, and converts from hostname
 def get_ip():
     if len(sys.argv) > 2:
         ip_address = sys.argv[2]
@@ -71,72 +76,84 @@ def parse_file(filename)->List[str]:
             current_port = ''
     return port_list
 
-#get input type and ports through command line input
-def commandline_parse() -> str:
-    parser = argparse.ArgumentParser(description="Your program description here.")
+#get input type, ports, and other output modifiers from command line
+def commandline_parse():
+    parser = argparse.ArgumentParser(description='Dannys port scanner, try looking at the readme for more info, thanks for checking it out! https://github.com/DaJaFu/Scanny-Dan')
     parser.add_argument('hostname',help='Hostname to scan.')
     parser.add_argument('ports',nargs='?',help='Single port, range of ports, or text file.')
-    parser.add_argument('-f', '--file',action='store_true', help='File argument')
-    parser.add_argument('-p', '--port',action='store_true', help='Port argument')
-    parser.add_argument('-r', '--range',action='store_true', help='Range argument')
+    input_type = parser.add_mutually_exclusive_group()
+    input_type.add_argument('-f', '--file',action='store_true', help='File argument.')
+    input_type.add_argument('-p', '--port',action='store_true', help='Port argument.')
+    input_type.add_argument('-r', '--range',action='store_true', help='Range argument.')
+    parser.add_argument('-v', '--verbose',action='store_true',help='Verbose Scan argument.')
+    parser.add_argument('-e','--export',action='store_true',help='Export to csv argument.')
     args = parser.parse_args()
+    #print(args)
 
     port_list = []
-
+    arg_return = []
     if args.file:
         #print('file')
+        arg_return.append('f')
         port_list = parse_file(args.ports)
-        return 'f', port_list
     elif args.port:
         #print('port')
+        arg_return.append('p')
         port_list.append(args.ports)
         return 'p', port_list
     elif args.range:
         #print('range')
+        arg_return.append('r')
         range_l = str(sys.argv[3]).split('-')
         for i in range(int(range_l[0]),int(range_l[1])+1):
             port_list.append(i)
-        return 'r', port_list
     else:
         return None
+    if args.verbose:
+        arg_return.append('v')
+    if args.export:
+        arg_return.append('e')
+    return arg_return, port_list
 
-def port_scan(host: str, port: List[str], results_list:list):
+commandline_results = commandline_parse()
+
+#testing to see if 2 seperate scan functions are more effecient
+def raw_port_scan(host: str, port: List[str], results_list:list):
     try:
         int(port)
     except ValueError:
         print(f"ERROR Expected integer - Received: {port}")
         print('-------------')
+        return False
+    sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    sock.settimeout(6)
+    service = get_service_name(port)
     try:
-        sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        sock.settimeout(6)
-        sock.connect((host,port))
-        print(f"Port {port} is open.")
-        print(f"Port is running service: {get_service_name(port)}")
-        print('-------------')
+        sock.connect((host,int(port)))
+        if 'v' in commandline_results[0]:
+            print(f'Port {port} is Open. Service: {service}')
+        results_list.append((port , 'Open', service))
         sock.close()
-        results_list.append((port , 'Open'))
-    except socket.timeout:  
-        print(f"Port {port} timed out, possibly closed.")
-        print(f"Port is running service: {get_service_name(port)}")
-        print('-------------')
+    except socket.timeout:
+        if 'v' in commandline_results[0]:
+            print(f'Port {port} timed out. Service: {service}')
+        results_list.append((port,'Timed Out', service))
         sock.close()
-        results_list.append((port , 'Timed Out'))
     except socket.error as e:
-        print(f"Error connecting to port {port}: {e}")
-        print(f"Port is running service: {get_service_name(port)}")
-        print('-------------')
+        if 'v' in commandline_results[0]:
+            print(f'Port {port} connection error {e}. Service: {service}')
+        results_list.append((port , f'Could not connect: {e}',service))
         sock.close()
-        results_list.append((port , f'Error: {e}'))
+        
 
 #since threading makes the output look ugly, this exports it into a csv instead.
 def export_csv(results:List[str],output_filename):
     with open(output_filename, 'w', newline='') as csvfile:
-        fieldnames = ['Port ', ' Status']
+        fieldnames = ['Port ', ' Status', 'Service: ']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
         writer.writeheader()
-        for port, status in results:
-            writer.writerow({'Port ': port, ' Status': status})
+        for port, status, service in results:
+            writer.writerow({'Port ': port, ' Status': status, 'Service: ': service})
 
     print(f'File: {output_filename}, has been succesfully generated.')
 
@@ -148,11 +165,11 @@ def thread_scan(host:str,ports:List[str]):
         port_number = int(port)
 
         #sets the maximum number of threads equal to 'max_threads'
-        while threading.active_count() > max_threads:
+        while threading.active_count() >= max_threads:
             #waits until a thread is availible to continue.
             pass
 
-        thread = threading.Thread(target=port_scan,args=(host,port_number,results_list))
+        thread = threading.Thread(target=raw_port_scan,args=(host,port_number,results_list))
         threads.append(thread)
         thread.start()
     
@@ -160,13 +177,16 @@ def thread_scan(host:str,ports:List[str]):
         thread.join()
     results = sorted(results_list, key=lambda x: x[0])
     return results
-        
+
 #if this script is the main program being run, attempt to scan ports using get_input
 if __name__ == "__main__":
-    commandline_results = commandline_parse()
+    result = []
     input_type = commandline_results[0]
     ports = commandline_results[1]
-    port_range_str = '-'.join([str(ports[0]),str(ports[len(ports)-1])])
+    if ports[0] != ports[len(ports)-1]: 
+        port_range_str = '-'.join([str(ports[0]),str(ports[len(ports)-1])])
+    else:
+        port_range_str = ''.join(ports)
     if not host:
         print('ERROR! Invalid ip address. Check input and try again!')
     if input_type == None:
@@ -174,8 +194,16 @@ if __name__ == "__main__":
     else:
         print(f'Scanning port(s): {port_range_str}, on host: {host}')
         print('--------------------------')
-        if len(ports) > 100:
-            export_csv(thread_scan(host,ports),'scan_test.csv')
-        else:
-            for port in ports:
-                port_scan(host,port,result)
+        if 'e' in commandline_results[0]:
+            start_time = time.time()
+            export_csv(thread_scan(host,ports),export_filename)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f'Scan completed in {elapsed_time:.2f} seconds.')
+        elif ('v', 'e') not in commandline_results[0]:
+            print("Looks like you didn't specify any output modifiers, but I'm still scannin'!")
+            start_time = time.time()
+            thread_scan(host, ports)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f'Scan completed in {elapsed_time:.2f} seconds.')
