@@ -87,6 +87,7 @@ def commandline_parse():
     input_type.add_argument('-r', '--range',action='store_true', help='Range argument.')
     parser.add_argument('-v', '--verbose',action='store_true',help='Verbose Scan argument.')
     parser.add_argument('-e','--export',action='store_true',help='Export to csv argument.')
+    parser.add_argument('-o','--open',action='store_true',help='Show only open ports.')
     args = parser.parse_args()
     #print(args)
 
@@ -113,6 +114,8 @@ def commandline_parse():
         arg_return.append('v')
     if args.export:
         arg_return.append('e')
+    if args.open:
+        arg_return.append('o')
     return arg_return, port_list
 
 commandline_results = commandline_parse()
@@ -133,16 +136,25 @@ def raw_port_scan(host: str, port: List[str], results_list:list):
         if 'v' in commandline_results[0]:
             print(f'Port {port} is Open. Service: {service}')
         results_list.append((port , 'Open', service))
+        try:
+            print('Attempting to grab service banner...')
+            sock.settimeout(20)
+            print(sock.recv(1024).decode())
+        except socket.error as e:
+            print(f'{e} Could not return banner!')
+            sock.settimeout(6)
         sock.close()
     except socket.timeout:
-        if 'v' in commandline_results[0]:
+        if 'v' in commandline_results[0] and 'o' not in commandline_results[0]:
             print(f'Port {port} timed out. Service: {service}')
-        results_list.append((port,'Timed Out', service))
+        if 'o' not in commandline_results[0]:
+            results_list.append((port,'Timed Out', service))
         sock.close()
     except socket.error as e:
-        if 'v' in commandline_results[0]:
+        if 'v' in commandline_results[0] and 'o' not in commandline_results[0]:
             print(f'Port {port} connection error {e}. Service: {service}')
-        results_list.append((port , f'Could not connect: {e}',service))
+        if 'o' not in commandline_results[0]:
+            results_list.append((port , f'Could not connect: {e}',service))
         sock.close()
         
 
@@ -183,7 +195,7 @@ if __name__ == "__main__":
     result = []
     input_type = commandline_results[0]
     ports = commandline_results[1]
-    if ports[0] != ports[len(ports)-1]: 
+    if ports[0] != ports[len(ports)-1]:
         port_range_str = '-'.join([str(ports[0]),str(ports[len(ports)-1])])
     else:
         port_range_str = ''.join(ports)
@@ -200,10 +212,17 @@ if __name__ == "__main__":
             end_time = time.time()
             elapsed_time = end_time - start_time
             print(f'Scan completed in {elapsed_time:.2f} seconds.')
-        elif ('v', 'e') not in commandline_results[0]:
+        elif 'v' in commandline_results[0]:
+            start_time = time.time()
+            thread_scan(host,ports),export_filename
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f'Scan completed in {elapsed_time:.2f} seconds.')
+        elif 'v' not in commandline_results[0] and 'e'  not in commandline_results[0]:
             print("Looks like you didn't specify any output modifiers, but I'm still scannin'!")
             start_time = time.time()
             thread_scan(host, ports)
             end_time = time.time()
             elapsed_time = end_time - start_time
             print(f'Scan completed in {elapsed_time:.2f} seconds.')
+        
