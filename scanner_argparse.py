@@ -47,12 +47,12 @@ class input_parser:
         if args.file:
             ports = self.parse_file(args.ports)
         else:
-            if '-' in args.ports:
+            try:
                 port_endpoints = args.ports.split('-')
                 ports = []
                 for i in range(int(port_endpoints[0]),int(port_endpoints[1])+1):
                     ports.append(i)
-            else:
+            except:
                 ports = [args.ports]
         return [host,ports,args]
             

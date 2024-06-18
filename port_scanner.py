@@ -18,6 +18,7 @@ from host_info import validate_ip
 #cmd_in is all relevant input from the commandline
 from scanner_argparse import input_parser
 cmd_in = input_parser.commandline_parse(input_parser)
+
 #host & ports should be self explanatory. host is a str, and ports is List[str]
 host = cmd_in[0]
 ports = cmd_in[1]
@@ -36,21 +37,6 @@ class port_scanner:
         self.host = validate_ip(host)['Address']
         self.max_threads = 50
 
-    #attempts TCP handshake with given ip:port
-    def tcp_handshake(self, port, ip):
-        packet=IP(dst=ip)/TCP(dport=int(port),flags='S')
-        #sends packet to destination ip address and stores anything received
-        response = sr1(packet, timeout=2)
-        if response and response.haslayer(TCP) and response.getlayer(TCP).flags==0x12:
-            #print(f"Received SYN-ACK from address {ip} over port {port}")
-            ack_packet = IP(dst=ip)/TCP(dport=int(port),flags='A')
-            send(ack_packet)
-            self.results_list.append((port,"Open"))
-            return (port, True)
-        else:
-            self.results_list.append((port,"Closed"))
-            return (port, False)
-
     #since threading makes the output look ugly, this exports it into a csv instead.
     def export_csv(self, results, output_filename):
         with open(output_filename, 'w', newline='') as csvfile:
@@ -58,14 +44,21 @@ class port_scanner:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             for port, status in results:
-                writer.writerow({'Port ': port, ' Status': status})
+                if args.open and status!="Closed":
+                    writer.writerow({'Port ': port, ' Status': status})
+                else:
+                    writer.writerow({'Port ': port, ' Status': status})
         print(f'File: {output_filename}, has been succesfully generated.')
 
-
+    #use threading to scan multiple ports at a time, if a TCP handshake fails, attempts UDP scan.
     def thread_scan(self,host:str,ports:List[str]):
         threads = []
         for port in ports:
-            port_number = int(port)
+            try:
+                port_number = int(port)
+            except:
+                print(f"ERROR: {port} is not a valid port number.")
+                continue
             #sets the maximum number of threads equal to 'max_threads'
             while threading.active_count() >= self.max_threads:
                 #waits until a thread is availible to continue.
@@ -90,4 +83,4 @@ class port_scanner:
 if __name__ == "__main__":
     scanner = port_scanner()
     port_scanner.run(scanner)
-    print(args)
+    #print(args)
