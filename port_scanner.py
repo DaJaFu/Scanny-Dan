@@ -7,6 +7,10 @@ import logging
 from scapy.all import *
 from typing import List
 
+#import local files
+from TCP_scan import tcp_handshake
+from scanner_argparse import input_parser
+
 '''
 Get input from command line via scanner argparse, use input
 '''
@@ -33,9 +37,16 @@ sounds_path = os.path.join(os.getcwd(),'sounds')
 
 class port_scanner:
     def __init__(self):
-        self.results_list = []
         self.host = validate_ip(host)['Address']
         self.max_threads = 50
+        self.verbose = 0
+        if args.Verbose:
+            self.verbose = 1
+
+        if args.ack:
+            self.scantype = True
+        else:
+            self.scantype = False
 
     #since threading makes the output look ugly, this exports it into a csv instead.
     def export_csv(self, results, output_filename):
@@ -43,16 +54,17 @@ class port_scanner:
             fieldnames = ['Port ', ' Status']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
-            for port, status in results:
-                if args.open and status!="Closed":
-                    writer.writerow({'Port ': port, ' Status': status})
+            for i in results:
+                if args.open and i["status"]!="closed":
+                    writer.writerow({'Port ': i["port"], ' Status': i["status"]})
                 else:
-                    writer.writerow({'Port ': port, ' Status': status})
+                    writer.writerow({'Port ': i["port"], ' Status': i["status"]})
         print(f'File: {output_filename}, has been succesfully generated.')
 
     #use threading to scan multiple ports at a time, if a TCP handshake fails, attempts UDP scan.
     def thread_scan(self,host:str,ports:List[str]):
         threads = []
+        results = []
         for port in ports:
             try:
                 port_number = int(port)
@@ -64,21 +76,27 @@ class port_scanner:
                 #waits until a thread is availible to continue.
                 pass
 
-            thread = threading.Thread(target=self.tcp_handshake,args=(port_number,host))
+            thread = threading.Thread(target=tcp_handshake,args=(port_number, host, results, self.scantype, self.verbose))
             threads.append(thread)
             thread.start()
         
         for thread in threads:
             thread.join()
+        return results
 
     def run(self):
-        self.thread_scan(host,ports)
-        if args.verbose:
-            for i in self.results_list:
-                print(f'Port: {i[0]} is {i[1]}')
+        output = self.thread_scan(host,ports)
+        if args.verbose or args.Verbose:
+            #print(f'verbose: {args.verbose}. Verbose: {args.Verbose}. Type = {self.verbose}')
+            if args.ack:
+                for i in output:
+                    print(f"Port: {i["port"]}, Filtered: {i["filtered"]}")
+            else:
+                for i in output:
+                    print(f'Port: {i["port"]} , Status: {i["status"]}')
         if args.export:
-            print(True)
-            self.export_csv(self.results_list, "test.csv")
+            #print(True)
+            self.export_csv(output, "test.csv")
         
 if __name__ == "__main__":
     scanner = port_scanner()
